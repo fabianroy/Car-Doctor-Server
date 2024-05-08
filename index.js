@@ -13,12 +13,36 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use(cookieParser())
+app.use(cookieParser());
+
+const logger = async (req, res, next) => {
+    console.log('Request received', req.host, req.originalUrl);
+    next();
+}
+
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+    console.log('Token:', token);
+    
+    if (!token) {
+        return res.status(401).send({ message: 'Unauthorized Access! No token provided.' });
+    }
+    
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            console.error('Token verification error:', err);
+            return res.status(401).send({ message: 'Unauthorized Access! Invalid token.' });
+        }
+        
+        console.log('Decoded Token:', decoded);
+        req.user = decoded;
+        next();
+    });
+};
 
 app.get('/', (req, res) => {
     res.send('Hello World!');
 });
-
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.he28ix7.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -35,28 +59,36 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const serviceCollection = client.db("CarDoctor").collection("services");
         const bookCollection = client.db("CarDoctor").collection("bookings");
         const userCollection = client.db("CarDoctor").collection("users");
 
         // auth related api
-        app.post('/jwt', async (req, res) => {
+        app.post('/jwt', logger, async (req, res) => {
             const user = req.body;
             console.log(user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' });
             res
                 .cookie('token', token, {
                     httpOnly: true,
-                    secure: false, // http://localhost:5173/login
-
+                    secure: true, // http://localhost:5173/login
+                    sameSite: 'none',
                 })
-                .send({success: true});
+                .send({ success: true });
         })
 
+        // log out related api
+
+        app.post('/logout', logger, async (req, res) => {
+            const user = req.body;
+            console.log('logging out:', user)
+            res.clearCookie('token', {maxAge:0}).send({success: true})
+        });
+
         // Services
-        app.get('/services', async (req, res) => {
+        app.get('/services', logger, async (req, res) => {
             const cursor = serviceCollection.find();
             const result = await cursor.toArray();
             res.send(result);
@@ -76,14 +108,18 @@ async function run() {
 
         // Bookings
 
-        app.get('/bookings', async (req, res) => {
-            console.log('token', req.cookies.token);
+        app.get('/bookings', logger, verifyToken, async (req, res) => {
+            // console.log('token', req.cookies.token);
+
+            if(req.query.email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden! You are not allowed to access this resource.' });
+            }
+
             let query = {}
             if (req.query.email) {
                 query = { email: req.query.email }
             }
-            const cursor = bookCollection.find(query);
-            const result = await cursor.toArray();
+            const result = await bookCollection.find(query).toArray();
             res.send(result);
         });
 
