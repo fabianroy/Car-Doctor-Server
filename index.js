@@ -7,11 +7,14 @@ const port = process.env.PORT || 3000;
 const env = require('dotenv').config();
 
 // middle wire
-app.use(cors({
-    origin: ['http://localhost:5173'],
-    credentials: true
-}));
 
+const corsOptions = {
+    origin: ['http://localhost:5173', 'https://car-doctor-fcd38.web.app', 'https://car-doctor-fcd38.firebaseapp.com'],
+    credentials: true,
+    optionSuccessStatus: 200,
+}
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 
