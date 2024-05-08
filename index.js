@@ -156,12 +156,27 @@ async function run() {
         });
 
         // users 
+        // app.get('/users', logger, verifyToken, async (req, res) => {
+        //     const cursor = userCollection.find();
+        //     const result = await cursor.toArray();
+        //     res.send(result);
+        // });
 
-        app.get('/users', async (req, res) => {
-            const cursor = userCollection.find();
-            const result = await cursor.toArray();
+        // make users api private like bookings
+        app.get('/users', logger, verifyToken, async (req, res) => {
+
+            if (req.query.email !== req.user.email) {
+                return res.status(403).send({ message: 'Forbidden! You are not allowed to access this resource.' });
+            }
+
+            let query = {}
+            if (req.query.email) {
+                query = { email: req.query.email }
+            }
+            const result = await userCollection.find(query).toArray();
             res.send(result);
         });
+        
 
         app.get('/users/:id', async (req, res) => {
             const id = req.params.id;
