@@ -26,17 +26,17 @@ const logger = async (req, res, next) => {
 const verifyToken = async (req, res, next) => {
     const token = req.cookies?.token;
     console.log('Token:', token);
-    
+
     if (!token) {
         return res.status(401).send({ message: 'Unauthorized Access! No token provided.' });
     }
-    
+
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
             console.error('Token verification error:', err);
             return res.status(401).send({ message: 'Unauthorized Access! Invalid token.' });
         }
-        
+
         console.log('Decoded Token:', decoded);
         req.user = decoded;
         next();
@@ -59,6 +59,14 @@ const client = new MongoClient(uri, {
     }
 });
 
+// cookie options
+
+const cookieOptions = {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    secure: process.env.NODE_ENV === 'production' ? true : false,
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -74,12 +82,7 @@ async function run() {
             console.log(user);
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' });
             res
-                .cookie('token', token, {
-                    httpOnly: true,
-                    secure: true, // http://localhost:5173/login
-                    sameSite: 'none',
-                })
-                .send({ success: true });
+                .cookie('token', token, cookieOptions).send({ success: true });
         })
 
         // log out related api
@@ -87,7 +90,7 @@ async function run() {
         app.post('/logout', logger, async (req, res) => {
             const user = req.body;
             console.log('logging out:', user)
-            res.clearCookie('token', {maxAge:0}).send({success: true})
+            res.clearCookie('token', { ...cookieOptions, maxAge: 0 }).send({ success: true })
         });
 
         // Services
@@ -114,7 +117,7 @@ async function run() {
         app.get('/bookings', logger, verifyToken, async (req, res) => {
             // console.log('token', req.cookies.token);
 
-            if(req.query.email !== req.user.email) {
+            if (req.query.email !== req.user.email) {
                 return res.status(403).send({ message: 'Forbidden! You are not allowed to access this resource.' });
             }
 
@@ -175,7 +178,7 @@ async function run() {
         });
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
