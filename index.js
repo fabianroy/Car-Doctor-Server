@@ -9,7 +9,7 @@ const env = require('dotenv').config();
 // middle wire
 
 const corsOptions = {
-    origin: ['http://localhost:5173', 'https://car-doctor-fcd38.web.app', 'https://car-doctor-fcd38.firebaseapp.com'],
+    origin: ['http://localhost:5173', 'https://car-doctor-fcd38.web.app'],
     credentials: true,
     optionSuccessStatus: 200,
 }
@@ -28,13 +28,13 @@ const verifyToken = async (req, res, next) => {
     console.log('Token:', token);
 
     if (!token) {
-        return res.status(401).send({ message: 'Unauthorized Access! No token provided.' });
+        return res.status(401).send({ message: 'Unauthorized Access!' });
     }
 
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
             console.error('Token verification error:', err);
-            return res.status(401).send({ message: 'Unauthorized Access! Invalid token.' });
+            return res.status(401).send({ message: 'Unauthorized Access!' });
         }
 
         console.log('Decoded Token:', decoded);
@@ -59,13 +59,11 @@ const client = new MongoClient(uri, {
     }
 });
 
-// cookie options
-
 const cookieOptions = {
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
-    secure: process.env.NODE_ENV === 'production' ? true : false,
-}
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+    secure: process.env.NODE_ENV === "production" ? true : false,
+};
 
 async function run() {
     try {
@@ -80,7 +78,7 @@ async function run() {
         app.post('/jwt', logger, async (req, res) => {
             const user = req.body;
             console.log(user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' });
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
             res
                 .cookie('token', token, cookieOptions).send({ success: true });
         })
@@ -90,7 +88,7 @@ async function run() {
         app.post('/logout', logger, async (req, res) => {
             const user = req.body;
             console.log('logging out:', user)
-            res.clearCookie('token', { ...cookieOptions, maxAge: 0 }).send({ success: true })
+            res.clearCookie('token', { maxAge: 0, httpOnly:true, sameSite: "none", secure: true }).send({ success: true })
         });
 
         // Services
@@ -117,7 +115,7 @@ async function run() {
         app.get('/bookings', logger, verifyToken, async (req, res) => {
             // console.log('token', req.cookies.token);
 
-            if (req.query.email !== req.user.email) {
+            if (req.user.email !== req.query.email) {
                 return res.status(403).send({ message: 'Forbidden! You are not allowed to access this resource.' });
             }
 
@@ -156,27 +154,11 @@ async function run() {
         });
 
         // users 
-        // app.get('/users', logger, verifyToken, async (req, res) => {
-        //     const cursor = userCollection.find();
-        //     const result = await cursor.toArray();
-        //     res.send(result);
-        // });
-
-        // make users api private like bookings
-        app.get('/users', logger, verifyToken, async (req, res) => {
-
-            if (req.query.email !== req.user.email) {
-                return res.status(403).send({ message: 'Forbidden! You are not allowed to access this resource.' });
-            }
-
-            let query = {}
-            if (req.query.email) {
-                query = { email: req.query.email }
-            }
-            const result = await userCollection.find(query).toArray();
+        app.get('/users', async (req, res) => {
+            const cursor = userCollection.find();
+            const result = await cursor.toArray();
             res.send(result);
         });
-        
 
         app.get('/users/:id', async (req, res) => {
             const id = req.params.id;
@@ -185,7 +167,6 @@ async function run() {
             res.send(result);
         });
 
-
         app.post('/users', async (req, res) => {
             const user = req.body;
             const result = await userCollection.insertOne(user);
@@ -193,7 +174,7 @@ async function run() {
         });
 
         // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
+        await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
@@ -206,3 +187,5 @@ run().catch(console.dir);
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
+
+// res.clearCookie('token', {maxAge:0,sameSite:"none",secure:true}).send({success:true})
